@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İş Takip Sistemi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Auth Sayfası -->
+    <div id="auth-bolum" class="flex items-center justify-center min-h-screen">
+        <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+            <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">İş Takip Sistemi</h1>
+            <div id="mesaj" class="hidden p-3 rounded-lg mb-4 text-sm"></div>
+            <input id="email" type="email" placeholder="Email" 
+                class="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:border-blue-500">
+            <input id="sifre" type="password" placeholder="Şifre"
+                class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-blue-500">
+            <button onclick="girisYap()" 
+                class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 font-semibold mb-2">
+                Giriş Yap
+            </button>
+            <button onclick="kayitOl()"
+                class="w-full bg-gray-200 text-gray-700 p-3 rounded-lg hover:bg-gray-300 font-semibold">
+                Kayıt Ol
+            </button>
+        </div>
+    </div>
+
+    <!-- Ana Uygulama -->
+    <div id="uygulama" class="hidden">
+        
+        <!-- Navbar -->
+        <nav class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-800">İş Takip Sistemi</h1>
+            <div class="flex items-center gap-4">
+                <span id="kullanici-email" class="text-gray-600 text-sm"></span>
+                <button onclick="cikisYap()" 
+                    class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 text-sm">
+                    Çıkış
+                </button>
+            </div>
+        </nav>
+
+        <div class="max-w-6xl mx-auto px-6 py-8">
+            
+            <!-- İstatistikler -->
+            <div id="istatistik-bolum" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+
+            <!-- İş Ekle -->
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Yeni Başvuru Ekle</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input id="sirket" type="text" placeholder="Şirket adı"
+                        class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <input id="pozisyon" type="text" placeholder="Pozisyon"
+                        class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <select id="durum" 
+                        class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                        <option value="Basvuruldu">Başvuruldu</option>
+                        <option value="Mulakat">Mülakat</option>
+                        <option value="Teklif">Teklif</option>
+                        <option value="Reddedildi">Reddedildi</option>
+                    </select>
+                    <input id="notlar" type="text" placeholder="Notlar (opsiyonel)"
+                        class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                </div>
+                <textarea id="aciklama" placeholder="İş ilanı açıklaması (AI analizi için)"
+                    class="w-full p-3 border border-gray-300 rounded-lg mt-4 focus:outline-none focus:border-blue-500 h-24"></textarea>
+                <button onclick="isEkle()" 
+                    class="mt-4 bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 font-semibold">
+                    Başvuru Ekle
+                </button>
+            </div>
+
+            <!-- İş Listesi -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Başvurularım</h2>
+                <div id="is-listesi"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem("token");
+        let email = localStorage.getItem("email");
+
+        const durumRenk = {
+            "Basvuruldu": "bg-blue-100 text-blue-700",
+            "Mulakat": "bg-yellow-100 text-yellow-700",
+            "Teklif": "bg-green-100 text-green-700",
+            "Reddedildi": "bg-red-100 text-red-700"
+        };
+
+        if (token) goster();
+
+        function mesajGoster(metin, tip) {
+            const div = document.getElementById("mesaj");
+            div.textContent = metin;
+            div.className = tip === "basari" 
+                ? "p-3 rounded-lg mb-4 text-sm bg-green-100 text-green-700"
+                : "p-3 rounded-lg mb-4 text-sm bg-red-100 text-red-700";
+            div.classList.remove("hidden");
+            setTimeout(() => div.classList.add("hidden"), 3000);
+        }
+
+        function goster() {
+            document.getElementById("auth-bolum").classList.add("hidden");
+            document.getElementById("uygulama").classList.remove("hidden");
+            document.getElementById("kullanici-email").textContent = email;
+            isleriYukle();
+            istatistikYukle();
+        }
+
+        async function girisYap() {
+            const emailVal = document.getElementById("email").value;
+            const sifreVal = document.getElementById("sifre").value;
+
+            const response = await fetch("/giris", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `username=${emailVal}&password=${sifreVal}`
+            });
+
+            const data = await response.json();
+
+            if (data.access_token) {
+                localStorage.setItem("token", data.access_token);
+                localStorage.setItem("email", emailVal);
+                token = data.access_token;
+                email = emailVal;
+                goster();
+            } else {
+                mesajGoster("Email veya şifre yanlış", "hata");
+            }
+        }
+
+        async function kayitOl() {
+            const emailVal = document.getElementById("email").value;
+            const sifreVal = document.getElementById("sifre").value;
+
+            const response = await fetch("/kayit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: emailVal, sifre: sifreVal })
+            });
+
+            const data = await response.json();
+
+            if (data.mesaj) {
+                mesajGoster("Kayıt başarılı!", "basari");
+                await girisYap();
+            } else {
+                mesajGoster(data.detail || "Hata oluştu", "hata");
+            }
+        }
+
+        function cikisYap() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("email");
+            token = null;
+            email = null;
+            document.getElementById("auth-bolum").classList.remove("hidden");
+            document.getElementById("uygulama").classList.add("hidden");
+        }
+
+        async function isEkle() {
+            const sirket = document.getElementById("sirket").value;
+            const pozisyon = document.getElementById("pozisyon").value;
+            const durum = document.getElementById("durum").value;
+            const aciklama = document.getElementById("aciklama").value;
+            const notlar = document.getElementById("notlar").value;
+
+            if (!sirket || !pozisyon) {
+                alert("Şirket ve pozisyon zorunlu");
+                return;
+            }
+
+            const btn = event.target;
+            btn.textContent = "Ekleniyor...";
+            btn.disabled = true;
+
+            const response = await fetch("/isler", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ sirket, pozisyon, durum, aciklama, notlar })
+            });
+
+            const data = await response.json();
+            
+            btn.textContent = "Başvuru Ekle";
+            btn.disabled = false;
+
+            document.getElementById("sirket").value = "";
+            document.getElementById("pozisyon").value = "";
+            document.getElementById("aciklama").value = "";
+            document.getElementById("notlar").value = "";
+
+            isleriYukle();
+            istatistikYukle();
+        }
+
+        async function durumGuncelle(isId, yeniDurum) {
+            await fetch(`/isler/${isId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ durum: yeniDurum })
+            });
+            isleriYukle();
+            istatistikYukle();
+        }
+
+        async function isSil(isId) {
+            if (!confirm("Bu başvuruyu silmek istiyor musunuz?")) return;
+            await fetch(`/isler/${isId}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            isleriYukle();
+            istatistikYukle();
+        }
+
+        async function isleriYukle() {
+            const response = await fetch("/isler", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const isler = await response.json();
+            const liste = document.getElementById("is-listesi");
+
+            if (isler.length === 0) {
+                liste.innerHTML = '<p class="text-gray-500 text-center py-8">Henüz başvuru yok</p>';
+                return;
+            }
+
+            liste.innerHTML = isler.map(is => `
+                <div class="border border-gray-200 rounded-lg p-4 mb-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h3 class="font-semibold text-gray-800">${is.pozisyon}</h3>
+                            <p class="text-gray-600 text-sm">${is.sirket}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select onchange="durumGuncelle(${is.id}, this.value)"
+                                class="text-sm p-1 border border-gray-300 rounded ${durumRenk[is.durum] || ''}">
+                                <option ${is.durum === 'Basvuruldu' ? 'selected' : ''}>Basvuruldu</option>
+                                <option ${is.durum === 'Mulakat' ? 'selected' : ''}>Mulakat</option>
+                                <option ${is.durum === 'Teklif' ? 'selected' : ''}>Teklif</option>
+                                <option ${is.durum === 'Reddedildi' ? 'selected' : ''}>Reddedildi</option>
+                            </select>
+                            <button onclick="isSil(${is.id})" 
+                                class="text-red-500 hover:text-red-700 text-sm">Sil</button>
+                        </div>
+                    </div>
+                    ${is.notlar ? `<p class="text-gray-500 text-sm mt-1">Not: ${is.notlar}</p>` : ''}
+                    ${is.ai_analiz ? `
+                        <details class="mt-3">
+                            <summary class="text-blue-500 text-sm cursor-pointer">AI Analizi Gör</summary>
+                            <div class="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">${is.ai_analiz}</div>
+                        </details>
+                    ` : ''}
+                    <p class="text-gray-400 text-xs mt-2">${new Date(is.basvuru_tarihi).toLocaleDateString("tr-TR")}</p>
+                </div>
+            `).join('');
+        }
+
+        async function istatistikYukle() {
+            const response = await fetch("/istatistik", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            const renkler = {
+                "Basvuruldu": "bg-blue-500",
+                "Mulakat": "bg-yellow-500",
+                "Teklif": "bg-green-500",
+                "Reddedildi": "bg-red-500"
+            };
+
+            const bolum = document.getElementById("istatistik-bolum");
+            bolum.innerHTML = `
+                <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+                    <p class="text-3xl font-bold text-gray-800">${data.toplam}</p>
+                    <p class="text-gray-500 text-sm mt-1">Toplam Başvuru</p>
+                </div>
+                ${Object.entries(data.durumlar).map(([durum, sayi]) => `
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <p class="text-3xl font-bold text-gray-800">${sayi}</p>
+                        <p class="text-gray-500 text-sm mt-1">${durum}</p>
+                    </div>
+                `).join('')}
+            `;
+        }
+    </script>
+</body>
+</html>

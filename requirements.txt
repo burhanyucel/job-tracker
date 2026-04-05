@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-dotenv
+sqlalchemy
+python-jose
+bcrypt==4.0.1
+python-multipart
+google-genai
