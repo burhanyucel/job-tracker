@@ -128,8 +128,8 @@ def is_ekle(veri: IsEkle, kullanici: Kullanici = Depends(aktif_kullanici), db: S
             )
             yeni_is.ai_analiz = response.text
             db.commit()
-        except:
-            pass
+        except Exception as e:
+            print(f"AI analiz hatasi: {e}")
 
     return yeni_is
 
